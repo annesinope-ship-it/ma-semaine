@@ -1,0 +1,210 @@
+package com.annesophie.semaine
+
+import android.app.Activity
+import android.content.Intent
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.os.Bundle
+import android.view.Gravity
+import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.widget.Button
+import android.widget.EditText
+import android.widget.HorizontalScrollView
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+
+/** L'appli : gérer les tâches de toute la semaine. */
+class MainActivity : Activity() {
+
+    private val wrap = ViewGroup.LayoutParams.WRAP_CONTENT
+    private val match = ViewGroup.LayoutParams.MATCH_PARENT
+    private val grey = 0xFF9A9A9A.toInt()
+    private val ink = 0xFF222222.toInt()
+
+    private var current = Day.today()
+    private lateinit var dayBar: LinearLayout
+    private lateinit var list: LinearLayout
+    private lateinit var input: EditText
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        intent.getStringExtra(DayWidgetProvider.EXTRA_DAY)?.let { current = Day.from(it) }
+
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(24), dp(16), dp(16))
+            setBackgroundColor(0xFFF4F1EC.toInt())
+        }
+
+        val title = TextView(this).apply {
+            text = "Ma semaine"
+            textSize = 28f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(ink)
+            setPadding(0, dp(8), 0, dp(12))
+        }
+        root.addView(title)
+
+        dayBar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val dayScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
+        dayScroll.addView(dayBar)
+        root.addView(dayScroll)
+
+        input = EditText(this).apply {
+            hint = "Nouvelle tâche"
+            isSingleLine = true
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            layoutParams = LinearLayout.LayoutParams(0, wrap, 1f)
+        }
+        val addButton = Button(this).apply { text = "Ajouter" }
+        val inputRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(12), 0, dp(8))
+        }
+        inputRow.addView(input)
+        inputRow.addView(addButton)
+        root.addView(inputRow)
+
+        list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val listScroll = ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(match, 0, 1f)
+        }
+        listScroll.addView(list)
+        root.addView(listScroll)
+
+        val clearButton = Button(this).apply { text = "Effacer les tâches faites" }
+        root.addView(clearButton)
+
+        setContentView(root)
+
+        addButton.setOnClickListener { addTask() }
+        input.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                addTask()
+                true
+            } else {
+                false
+            }
+        }
+        clearButton.setOnClickListener {
+            TaskStore.clearDone(this, current)
+            changed()
+        }
+
+        render()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.getStringExtra(DayWidgetProvider.EXTRA_DAY)?.let {
+            current = Day.from(it)
+            render()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::list.isInitialized) render()
+    }
+
+    private fun addTask() {
+        TaskStore.add(this, current, input.text.toString())
+        input.setText("")
+        changed()
+    }
+
+    private fun changed() {
+        DayWidgetProvider.refreshAll(this)
+        render()
+    }
+
+    private fun pill(color: Int, radius: Int): GradientDrawable {
+        val d = GradientDrawable()
+        d.cornerRadius = dp(radius).toFloat()
+        d.setColor(color)
+        return d
+    }
+
+    private fun render() {
+        // Barre des jours
+        dayBar.removeAllViews()
+        Day.values().forEach { day ->
+            val count = TaskStore.remaining(this, day)
+            val selected = day == current
+            val chip = TextView(this)
+            chip.text = if (count > 0) "${day.short}  $count" else day.short
+            chip.textSize = 14f
+            chip.setTypeface(null, Typeface.BOLD)
+            chip.setPadding(dp(14), dp(8), dp(14), dp(8))
+            chip.setTextColor(if (selected) Color.WHITE else day.color)
+            chip.background = pill(if (selected) day.color else Color.WHITE, 18)
+            val lp = LinearLayout.LayoutParams(wrap, wrap)
+            lp.marginEnd = dp(8)
+            chip.layoutParams = lp
+            chip.setOnClickListener {
+                current = day
+                render()
+            }
+            dayBar.addView(chip)
+        }
+
+        // Liste du jour sélectionné
+        list.removeAllViews()
+        val tasks = TaskStore.getTasks(this, current).sortedBy { it.done }
+        if (tasks.isEmpty()) {
+            val empty = TextView(this)
+            empty.text = "Aucune tâche pour ${current.label.lowercase()}"
+            empty.setTextColor(grey)
+            empty.setPadding(dp(4), dp(16), 0, 0)
+            list.addView(empty)
+        }
+        tasks.forEach { task ->
+            val row = LinearLayout(this)
+            row.orientation = LinearLayout.HORIZONTAL
+            row.gravity = Gravity.CENTER_VERTICAL
+            row.setPadding(dp(12), dp(10), dp(8), dp(10))
+            row.background = pill(Color.WHITE, 14)
+            val rowLp = LinearLayout.LayoutParams(match, wrap)
+            rowLp.bottomMargin = dp(8)
+            row.layoutParams = rowLp
+
+            val check = ImageView(this)
+            check.setImageResource(if (task.done) R.drawable.ic_check_on else R.drawable.ic_check_off)
+            check.layoutParams = LinearLayout.LayoutParams(dp(24), dp(24))
+
+            val label = TextView(this)
+            label.text = task.text
+            label.textSize = 16f
+            label.setTextColor(if (task.done) grey else ink)
+            if (task.done) label.paintFlags = label.paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
+            label.setPadding(dp(12), 0, dp(8), 0)
+            label.layoutParams = LinearLayout.LayoutParams(0, wrap, 1f)
+
+            val delete = TextView(this)
+            delete.text = "✕"
+            delete.textSize = 16f
+            delete.setTextColor(grey)
+            delete.setPadding(dp(8), dp(4), dp(8), dp(4))
+            delete.setOnClickListener {
+                TaskStore.delete(this, current, task.id)
+                changed()
+            }
+
+            row.setOnClickListener {
+                TaskStore.toggle(this, current, task.id)
+                changed()
+            }
+
+            row.addView(check)
+            row.addView(label)
+            row.addView(delete)
+            list.addView(row)
+        }
+    }
+}
