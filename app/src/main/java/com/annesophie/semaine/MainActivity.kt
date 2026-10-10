@@ -1,7 +1,10 @@
 package com.annesophie.semaine
 
 import android.app.Activity
+import android.app.AlertDialog
+import android.content.ClipboardManager
 import android.content.Intent
+import android.widget.Toast
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
@@ -46,9 +49,25 @@ class MainActivity : Activity() {
             textSize = 28f
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(ink)
+            layoutParams = LinearLayout.LayoutParams(0, wrap, 1f)
+        }
+        val pasteButton = TextView(this).apply {
+            text = "📋  Coller une liste"
+            textSize = 14f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(ink)
+            setPadding(dp(14), dp(8), dp(14), dp(8))
+            background = pill(Color.WHITE, 18)
+            setOnClickListener { showPasteDialog() }
+        }
+        val titleRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             setPadding(0, dp(8), 0, dp(12))
         }
-        root.addView(title)
+        titleRow.addView(title)
+        titleRow.addView(pasteButton)
+        root.addView(titleRow)
 
         dayBar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val dayScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
@@ -122,6 +141,58 @@ class MainActivity : Activity() {
     private fun changed() {
         DayWidgetProvider.refreshAll(this)
         render()
+    }
+
+    /** Coller une liste pour toute la semaine. */
+    private fun showPasteDialog() {
+        val box = EditText(this).apply {
+            hint = "lun : courses\nven : dentiste\nwe : run club, film"
+            minLines = 6
+            gravity = Gravity.TOP or Gravity.START
+            isSingleLine = false
+        }
+
+        // Pré-remplit avec le presse-papiers s'il contient du texte
+        try {
+            val clip = (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).primaryClip
+            val clipText = clip?.getItemAt(0)?.coerceToText(this)?.toString()
+            if (!clipText.isNullOrBlank()) box.setText(clipText)
+        } catch (e: Exception) {
+            // presse-papiers inaccessible : on laisse vide
+        }
+
+        val help = TextView(this).apply {
+            text = "Une ligne par jour (lun, mar, mer, jeu, ven, we).\n" +
+                "Plusieurs tâches : séparées par des virgules.\n" +
+                "Sans jour : la tâche va dans ${current.label.lowercase()}."
+            setTextColor(grey)
+            textSize = 12f
+            setPadding(0, 0, 0, dp(8))
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        content.addView(help)
+        content.addView(box)
+
+        AlertDialog.Builder(this)
+            .setTitle("Coller une liste")
+            .setView(content)
+            .setNegativeButton("Annuler", null)
+            .setPositiveButton("Ajouter") { _, _ ->
+                val items = WeekParser.parse(box.text.toString(), current)
+                items.forEach { (day, text) -> TaskStore.add(this, day, text) }
+                changed()
+                val days = items.map { it.first }.distinct().size
+                Toast.makeText(
+                    this,
+                    if (items.isEmpty()) "Aucune tâche trouvée"
+                    else "${items.size} tâche(s) ajoutée(s) sur $days jour(s)",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+            .show()
     }
 
     private fun pill(color: Int, radius: Int): GradientDrawable {
