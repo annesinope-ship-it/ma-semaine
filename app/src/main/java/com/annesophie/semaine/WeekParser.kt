@@ -2,21 +2,22 @@ package com.annesophie.semaine
 
 import java.text.Normalizer
 
+data class ParsedTask(val day: Day, val text: String, val nth: Int = 0)
+
 /**
  * Transforme un texte collé en tâches par jour.
  *
- * Formats acceptés :
+ * Format court (plusieurs tâches séparées par des virgules) :
  *   lun : courses
- *   ven : dentiste
  *   we : run club, film
  *
- * ou bien un jour seul suivi de tâches sur les lignes d'après :
+ * Format liste (une tâche par ligne, les virgules sont gardées) :
  *   Lundi
- *   - courses
- *   - pressing
+ *   - ☀ Lit fait, vaisselle, surfaces cuisine
+ *   - ☾ Exfoliant AHA/BHA
  *
+ * Tâche mensuelle : "- 1er du mois : Shampoing clarifiant" (ou 2e, 3e, 4e).
  * Une ligne sans jour va dans le dernier jour cité (ou le jour affiché dans l'appli).
- * Plusieurs tâches sur une ligne : séparées par des virgules ou des points-virgules.
  */
 object WeekParser {
 
@@ -28,8 +29,13 @@ object WeekParser {
         "ven" to Day.FRI, "vendredi" to Day.FRI, "fri" to Day.FRI, "friday" to Day.FRI,
         "we" to Day.WEEKEND, "w-e" to Day.WEEKEND, "weekend" to Day.WEEKEND,
         "week-end" to Day.WEEKEND, "week end" to Day.WEEKEND,
-        "sam" to Day.WEEKEND, "samedi" to Day.WEEKEND, "sat" to Day.WEEKEND, "saturday" to Day.WEEKEND,
-        "dim" to Day.WEEKEND, "dimanche" to Day.WEEKEND, "sun" to Day.WEEKEND, "sunday" to Day.WEEKEND
+        "sam" to Day.SAT, "samedi" to Day.SAT, "sat" to Day.SAT, "saturday" to Day.SAT,
+        "dim" to Day.SUN, "dimanche" to Day.SUN, "sun" to Day.SUN, "sunday" to Day.SUN
+    )
+
+    private val monthly = Regex(
+        "^(\\d)\\s*(?:er|re|e|eme|ème)?\\s+(?:dimanche\\s+|dim\\.?\\s+)?du\\s+mois\\s*[:–—-]\\s*(.+)$",
+        RegexOption.IGNORE_CASE
     )
 
     private fun normalize(s: String): String =
@@ -43,24 +49,36 @@ object WeekParser {
     private fun cleanTask(s: String): String =
         s.trim().trimStart('-', '•', '*', '–', '—', '·', '☐', '□', ' ').trim()
 
-    private fun splitTasks(s: String): List<String> =
-        s.split(',', ';').map { cleanTask(it) }.filter { it.isNotEmpty() }
+    private fun toTask(day: Day, raw: String): ParsedTask? {
+        val t = cleanTask(raw)
+        if (t.isEmpty()) return null
+        val m = monthly.find(t)
+        if (m != null) {
+            val n = m.groupValues[1].toIntOrNull()?.coerceIn(1, 5) ?: 0
+            return ParsedTask(day, m.groupValues[2].trim(), n)
+        }
+        return ParsedTask(day, t)
+    }
 
-    fun parse(text: String, defaultDay: Day): List<Pair<Day, String>> {
-        val result = mutableListOf<Pair<Day, String>>()
+    fun parse(text: String, defaultDay: Day): List<ParsedTask> {
+        val result = mutableListOf<ParsedTask>()
         var currentDay = defaultDay
 
         text.lines().forEach { rawLine ->
             val line = cleanTask(rawLine)
             if (line.isEmpty()) return@forEach
+            // Ligne de titre "ROUTINE" : ignorée
+            if (normalize(line).startsWith("routine")) return@forEach
 
-            // "jour : tâches" (deux-points ou tiret comme séparateur)
+            // Format court "jour : tâche, tâche"
             val sep = Regex("^([^:–—]{1,12}?)\\s*[:–—]\\s*(.*)$").find(line)
             if (sep != null) {
                 val day = dayOf(sep.groupValues[1])
                 if (day != null) {
                     currentDay = day
-                    splitTasks(sep.groupValues[2]).forEach { result.add(day to it) }
+                    sep.groupValues[2].split(',', ';').forEach { part ->
+                        toTask(day, part)?.let { result.add(it) }
+                    }
                     return@forEach
                 }
             }
@@ -72,8 +90,8 @@ object WeekParser {
                 return@forEach
             }
 
-            // Sinon : tâche(s) pour le jour en cours
-            splitTasks(line).forEach { result.add(currentDay to it) }
+            // Sinon : une tâche entière pour le jour en cours
+            toTask(currentDay, line)?.let { result.add(it) }
         }
         return result
     }

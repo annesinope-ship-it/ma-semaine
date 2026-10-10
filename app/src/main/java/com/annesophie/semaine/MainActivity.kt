@@ -14,6 +14,7 @@ import android.view.Gravity
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
@@ -162,7 +163,7 @@ class MainActivity : Activity() {
         }
 
         val help = TextView(this).apply {
-            text = "Une ligne par jour (lun, mar, mer, jeu, ven, we).\n" +
+            text = "Une ligne par jour (lun, mar, mer, jeu, ven, sam, dim, we).\n" +
                 "Plusieurs tâches : séparées par des virgules.\n" +
                 "Sans jour : la tâche va dans ${current.label.lowercase()}."
             setTextColor(grey)
@@ -173,8 +174,15 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), 0)
         }
+        val routineBox = CheckBox(this).apply {
+            text = "🔁 Routine : revient chaque semaine et se décoche le lundi (remplace la routine déjà enregistrée pour ces jours)"
+            textSize = 13f
+        }
         content.addView(help)
         content.addView(box)
+        content.addView(routineBox)
+        // Un texte qui commence par "ROUTINE" coche la case automatiquement
+        if (box.text.toString().trimStart().uppercase().startsWith("ROUTINE")) routineBox.isChecked = true
 
         AlertDialog.Builder(this)
             .setTitle("Coller une liste")
@@ -182,9 +190,11 @@ class MainActivity : Activity() {
             .setNegativeButton("Annuler", null)
             .setPositiveButton("Ajouter") { _, _ ->
                 val items = WeekParser.parse(box.text.toString(), current)
-                items.forEach { (day, text) -> TaskStore.add(this, day, text) }
+                val routine = routineBox.isChecked
+                if (routine) TaskStore.clearRoutine(this, items.map { it.day }.toSet())
+                items.forEach { TaskStore.add(this, it.day, it.text, routine, it.nth) }
                 changed()
-                val days = items.map { it.first }.distinct().size
+                val days = items.map { it.day }.distinct().size
                 Toast.makeText(
                     this,
                     if (items.isEmpty()) "Aucune tâche trouvée"
@@ -227,15 +237,32 @@ class MainActivity : Activity() {
 
         // Liste du jour sélectionné
         list.removeAllViews()
-        val tasks = TaskStore.getTasks(this, current).sortedBy { it.done }
-        if (tasks.isEmpty()) {
+        val entries = TaskStore.entries(this, current, false)
+        if (entries.isEmpty()) {
             val empty = TextView(this)
             empty.text = "Aucune tâche pour ${current.label.lowercase()}"
             empty.setTextColor(grey)
             empty.setPadding(dp(4), dp(16), 0, 0)
             list.addView(empty)
         }
-        tasks.forEach { task ->
+        var lastSource: Day? = null
+        val multi = current.sources.size > 1
+        entries.forEach { entry ->
+            val task = entry.task
+            val done = entry.done
+
+            // Week-end : petits intertitres Samedi / Dimanche / Week-end
+            if (multi && entry.day != lastSource) {
+                val header = TextView(this)
+                header.text = entry.day.label.uppercase()
+                header.textSize = 12f
+                header.setTypeface(null, Typeface.BOLD)
+                header.setTextColor(entry.day.color)
+                header.setPadding(dp(4), dp(10), 0, dp(6))
+                list.addView(header)
+                lastSource = entry.day
+            }
+
             val row = LinearLayout(this)
             row.orientation = LinearLayout.HORIZONTAL
             row.gravity = Gravity.CENTER_VERTICAL
@@ -246,14 +273,14 @@ class MainActivity : Activity() {
             row.layoutParams = rowLp
 
             val check = ImageView(this)
-            check.setImageResource(if (task.done) R.drawable.ic_check_on else R.drawable.ic_check_off)
+            check.setImageResource(if (done) R.drawable.ic_check_on else R.drawable.ic_check_off)
             check.layoutParams = LinearLayout.LayoutParams(dp(24), dp(24))
 
             val label = TextView(this)
-            label.text = task.text
+            label.text = if (task.routine) "${task.displayText()}  🔁" else task.displayText()
             label.textSize = 16f
-            label.setTextColor(if (task.done) grey else ink)
-            if (task.done) label.paintFlags = label.paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
+            label.setTextColor(if (done) grey else ink)
+            if (done) label.paintFlags = label.paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
             label.setPadding(dp(12), 0, dp(8), 0)
             label.layoutParams = LinearLayout.LayoutParams(0, wrap, 1f)
 
@@ -263,12 +290,12 @@ class MainActivity : Activity() {
             delete.setTextColor(grey)
             delete.setPadding(dp(8), dp(4), dp(8), dp(4))
             delete.setOnClickListener {
-                TaskStore.delete(this, current, task.id)
+                TaskStore.delete(this, entry.day, task.id)
                 changed()
             }
 
             row.setOnClickListener {
-                TaskStore.toggle(this, current, task.id)
+                TaskStore.toggle(this, entry.day, task.id)
                 changed()
             }
 

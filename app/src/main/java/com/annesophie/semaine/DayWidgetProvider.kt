@@ -48,7 +48,7 @@ class DayWidgetProvider : AppWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.widget_day)
 
             // En-tête : jour (avec un point si c'est aujourd'hui) + nombre de tâches restantes
-            val isToday = day == Day.today()
+            val isToday = day.isToday()
             views.setTextViewText(R.id.day_title, if (isToday) "● ${day.short}" else day.short)
             views.setTextColor(R.id.day_title, day.color)
             views.setTextViewText(R.id.day_count, TaskStore.remaining(context, day).toString())

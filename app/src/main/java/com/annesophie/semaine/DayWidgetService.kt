@@ -15,39 +15,46 @@ class TaskFactory(
     private val day: Day
 ) : RemoteViewsService.RemoteViewsFactory {
 
-    private var tasks: List<Task> = emptyList()
+    private var entries: List<Entry> = emptyList()
 
-    // Tâches à faire d'abord, tâches faites en bas
-    private fun load(): List<Task> = TaskStore.getTasks(context, day).sortedBy { it.done }
+    // Tâches à faire d'abord, tâches faites en bas (l'ordre d'origine est gardé sinon)
+    private fun load(): List<Entry> = TaskStore.entries(context, day, true).sortedBy { it.done }
 
     override fun onCreate() {
-        tasks = load()
+        entries = load()
     }
 
     override fun onDataSetChanged() {
-        tasks = load()
+        entries = load()
     }
 
     override fun onDestroy() {}
 
-    override fun getCount(): Int = tasks.size
+    override fun getCount(): Int = entries.size
 
     override fun getViewAt(position: Int): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_item)
-        val task = tasks.getOrNull(position) ?: return views
+        val entry = entries.getOrNull(position) ?: return views
+        val task = entry.task
 
-        views.setTextViewText(R.id.item_text, task.text)
+        // Dans le widget Week-end, on précise Sam / Dim
+        val prefix = if (entry.day != day && entry.day != Day.WEEKEND) {
+            entry.day.short.lowercase().replaceFirstChar { it.uppercase() } + " · "
+        } else {
+            ""
+        }
+        views.setTextViewText(R.id.item_text, prefix + task.displayText())
         views.setTextColor(
             R.id.item_text,
-            if (task.done) 0xFFAAAAAA.toInt() else 0xFF222222.toInt()
+            if (entry.done) 0xFFAAAAAA.toInt() else 0xFF222222.toInt()
         )
         views.setImageViewResource(
             R.id.item_check,
-            if (task.done) R.drawable.ic_check_on else R.drawable.ic_check_off
+            if (entry.done) R.drawable.ic_check_on else R.drawable.ic_check_off
         )
 
         val fill = Intent().apply {
-            putExtra(DayWidgetProvider.EXTRA_DAY, day.name)
+            putExtra(DayWidgetProvider.EXTRA_DAY, entry.day.name)
             putExtra(DayWidgetProvider.EXTRA_TASK_ID, task.id)
         }
         views.setOnClickFillInIntent(R.id.item_root, fill)
