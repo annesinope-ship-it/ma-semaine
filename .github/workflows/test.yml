@@ -11,6 +11,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [28, 30, 34]
     steps:
       - uses: actions/checkout@v4
 
@@ -35,7 +39,7 @@ jobs:
       - name: Téléphone virtuel + test
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 34
+          api-level: ${{ matrix.api }}
           target: google_apis
           arch: x86_64
           profile: pixel_6
@@ -57,16 +61,19 @@ jobs:
         run: |
           mkdir -p out
           cp instrument.txt out/ 2>/dev/null || true
-          grep -iE "AndroidRuntime|AppWidget|RemoteViews|WidgetTest|semaine|FATAL|Exception" logcat.txt | head -400 > out/logcat-filtre.txt 2>/dev/null || true
-          find shots -name "*.png" -exec cp {} out/ \; 2>/dev/null || true
+          grep -vE "AppsFilter|ziparchive|nativeloader|ClassLoaderContext" logcat.txt | grep -iE "AndroidRuntime|AppWidget|RemoteViews|WidgetTest|FATAL|Exception|semaine" | head -400 > out/logcat-filtre.txt 2>/dev/null || true
+          for f in $(find shots -name "*.png"); do cp "$f" "out/api${{ matrix.api }}-$(basename $f)"; done
+          [ -f out/instrument.txt ] && mv out/instrument.txt out/api${{ matrix.api }}-instrument.txt
+          [ -f out/logcat-filtre.txt ] && mv out/logcat-filtre.txt out/api${{ matrix.api }}-logcat.txt
+          true
           ls out
 
       - name: Publier les résultats
         if: always()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: tests-${{ github.run_number }}
-          name: Tests ${{ github.run_number }}
+          tag_name: tests-${{ github.run_number }}-api${{ matrix.api }}
+          name: Tests ${{ github.run_number }} API ${{ matrix.api }}
           prerelease: true
           make_latest: false
           files: out/*

@@ -113,4 +113,45 @@ class WidgetScreenshotTest {
 
         inst.runOnMainSync { host.stopListening() }
     }
+
+    /** Parcours réel : on pose un widget, la fenêtre « Quel jour ? » s'ouvre, on choisit Lundi. */
+    @Test
+    fun configFlow() {
+        RoutineDefaults.seedIfNeeded(ctx)
+        val manager = AppWidgetManager.getInstance(ctx)
+        val host = AppWidgetHost(ctx, 4343)
+        val id = host.allocateAppWidgetId()
+        manager.bindAppWidgetIdIfAllowed(id, ComponentName(ctx, DayWidgetProvider::class.java))
+
+        val cfgIntent = Intent(ctx, ConfigActivity::class.java)
+            .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val cfg = inst.startActivitySync(cfgIntent)
+        shoot("4-choix-du-jour.png")
+        inst.runOnMainSync {
+            fun find(v: android.view.View): android.widget.Button? {
+                if (v is android.widget.Button && v.text.toString() == "Mardi") return v
+                if (v is ViewGroup) for (i in 0 until v.childCount) find(v.getChildAt(i))?.let { return it }
+                return null
+            }
+            find(cfg.window.decorView)!!.performClick()
+        }
+        Thread.sleep(1000)
+
+        val launch = Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val activity: Activity = inst.startActivitySync(launch)
+        inst.runOnMainSync {
+            host.startListening()
+            val frame = FrameLayout(activity).apply {
+                setBackgroundColor(Color.rgb(120, 140, 160))
+                setPadding(30, 80, 30, 30)
+            }
+            val v = host.createView(activity, id, manager.getAppWidgetInfo(id))
+            frame.addView(v, FrameLayout.LayoutParams(500, 520))
+            activity.setContentView(frame)
+        }
+        DayWidgetProvider.refreshAll(ctx)
+        shoot("5-apres-choix.png")
+        inst.runOnMainSync { host.stopListening() }
+    }
 }
