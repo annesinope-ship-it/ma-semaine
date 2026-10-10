@@ -23,11 +23,24 @@ data class Task(
     fun isDone(): Boolean =
         if (routine) doneOn.isNotEmpty() && doneOn >= Day.weekStart().toString() else done
 
+    /** Matin (☀), soir (☾) ou sans moment, selon le symbole en début de tâche. */
+    fun period(): Period {
+        val t = text.trimStart()
+        return when {
+            t.startsWith("☀") -> Period.MORNING
+            t.startsWith("☾") || t.startsWith("🌙") -> Period.EVENING
+            else -> Period.NONE
+        }
+    }
+
+    /** Texte sans le symbole ☀ / ☾ du début. */
+    fun cleanText(): String = text.replace(LEADING_SYMBOLS, "").ifBlank { text }
+
     /** Texte affiché, avec la mention "1er du mois" si besoin. */
     fun displayText(): String = when (nth) {
-        0 -> text
-        1 -> "$text (1er du mois)"
-        else -> "$text (${nth}e du mois)"
+        0 -> cleanText()
+        1 -> "${cleanText()} (1er du mois)"
+        else -> "${cleanText()} (${nth}e du mois)"
     }
 
     /** Visible cette semaine ? (toujours vrai sauf pour les tâches "n-ième du mois") */
@@ -36,6 +49,20 @@ data class Task(
         val dom = date.dayOfMonth
         return dom in ((nth - 1) * 7 + 1)..(nth * 7)
     }
+}
+
+private val LEADING_SYMBOLS = Regex("^(?:☀|☾|🌙|\\uFE0F|\\s)+")
+
+enum class Period(val label: String) {
+    NONE("✦ À faire"),
+    MORNING("☀ Matin"),
+    EVENING("☾ Soir")
+}
+
+/** Une ligne affichée : intertitre (jour ou moment) ou tâche. */
+sealed class Row {
+    data class Header(val text: String, val big: Boolean) : Row()
+    data class Item(val entry: Entry) : Row()
 }
 
 /** Une tâche avec le jour (la liste) auquel elle appartient. */
@@ -88,7 +115,10 @@ object TaskStore {
      * onlyThisWeek = masque les tâches "n-ième du mois" qui ne tombent pas cette semaine.
      */
     fun entries(c: Context, day: Day, onlyThisWeek: Boolean): List<Entry> =
-        day.sources.flatMap { src ->
+        entries(c, day.sources, onlyThisWeek)
+
+    fun entries(c: Context, sources: List<Day>, onlyThisWeek: Boolean): List<Entry> =
+        sources.flatMap { src ->
             val date = src.dateThisWeek()
             getTasks(c, src)
                 .filter { !onlyThisWeek || it.isVisibleOn(date) }
@@ -129,6 +159,48 @@ object TaskStore {
     }
 
     fun remaining(c: Context, day: Day): Int = entries(c, day, true).count { !it.done }
+
+    fun remaining(c: Context, sources: List<Day>): Int = entries(c, sources, true).count { !it.done }
+
+    /**
+     * Lignes à afficher, regroupées :
+     * - par jour si plusieurs listes (week-end : Samedi / Dimanche / Week-end)
+     * - puis par moment (À faire / ☀ Matin / ☾ Soir) dès qu'il y a des tâches matin ou soir.
+     * Dans chaque groupe : à faire d'abord, faites en bas.
+     */
+    fun rows(c: Context, sources: List<Day>, onlyThisWeek: Boolean): List<Row> {
+        val multi = sources.size > 1
+        val out = mutableListOf<Row>()
+        sources.forEach { src ->
+            val list = entries(c, listOf(src), onlyThisWeek)
+            if (list.isEmpty()) return@forEach
+            if (multi) out.add(Row.Header(src.label.uppercase(), true))
+            val groups = list.groupBy { it.task.period() }
+            val tagged = groups.keys.any { it != Period.NONE }
+            Period.values().forEach { p ->
+                val group = groups[p] ?: return@forEach
+                if (tagged) out.add(Row.Header(p.label, false))
+                group.sortedBy { it.done }.forEach { out.add(Row.Item(it)) }
+            }
+        }
+        return out
+    }
+
+    // Motif décoratif de la case d'un jour
+    fun getDecor(c: Context, day: Day): String = prefs(c).getString("decor_${day.name}", "") ?: ""
+
+    fun setDecor(c: Context, day: Day, key: String) {
+        prefs(c).edit().putString("decor_${day.name}", key).commit()
+    }
+
+    // Rappel du soir
+    fun reminderEnabled(c: Context): Boolean = prefs(c).getBoolean("reminder_on", true)
+
+    fun reminderMinutes(c: Context): Int = prefs(c).getInt("reminder_min", 21 * 60)
+
+    fun setReminder(c: Context, enabled: Boolean, minutes: Int) {
+        prefs(c).edit().putBoolean("reminder_on", enabled).putInt("reminder_min", minutes).commit()
+    }
 
     // Couleur de fond de la case d'un jour
     fun getColor(c: Context, day: Day): Int = prefs(c).getInt("color_${day.name}", Palette.DEFAULT)

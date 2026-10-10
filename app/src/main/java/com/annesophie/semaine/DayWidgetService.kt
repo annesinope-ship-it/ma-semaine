@@ -7,63 +7,74 @@ import android.widget.RemoteViewsService
 
 class DayWidgetService : RemoteViewsService() {
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory =
-        TaskFactory(applicationContext, Day.from(intent.getStringExtra(DayWidgetProvider.EXTRA_DAY)))
+        TaskFactory(
+            applicationContext,
+            Day.from(intent.getStringExtra(DayWidgetProvider.EXTRA_DAY)),
+            intent.getBooleanExtra(DayWidgetProvider.EXTRA_TODAY, false)
+        )
 }
 
 class TaskFactory(
     private val context: Context,
-    private val day: Day
+    private val fixedDay: Day,
+    private val todayMode: Boolean
 ) : RemoteViewsService.RemoteViewsFactory {
 
-    private var entries: List<Entry> = emptyList()
+    private var rows: List<Row> = emptyList()
     private var bg: Int = Palette.DEFAULT
+    private var accent: Int = 0xFF8A8A8A.toInt()
 
-    // Tâches à faire d'abord, tâches faites en bas (l'ordre d'origine est gardé sinon)
-    private fun load(): List<Entry> = TaskStore.entries(context, day, true).sortedBy { it.done }
-
-    override fun onCreate() {
-        entries = load()
+    private fun load() {
+        // Le widget Aujourd'hui recalcule le jour à chaque mise à jour (passage de minuit)
+        val day = if (todayMode) Day.today() else fixedDay
+        val sources = if (todayMode) Day.todaySources() else day.sources
         bg = TaskStore.getColor(context, day)
+        accent = Palette.titleColor(bg, day)
+        rows = TaskStore.rows(context, sources, true)
     }
 
-    override fun onDataSetChanged() {
-        entries = load()
-        bg = TaskStore.getColor(context, day)
-    }
+    override fun onCreate() = load()
+
+    override fun onDataSetChanged() = load()
 
     override fun onDestroy() {}
 
-    override fun getCount(): Int = entries.size
+    override fun getCount(): Int = rows.size
 
     override fun getViewAt(position: Int): RemoteViews {
-        val views = RemoteViews(context.packageName, R.layout.widget_item)
-        val entry = entries.getOrNull(position) ?: return views
-        val task = entry.task
-
-        // Dans le widget Week-end, on précise Sam / Dim
-        val prefix = if (entry.day != day && entry.day != Day.WEEKEND) {
-            entry.day.short.lowercase().replaceFirstChar { it.uppercase() } + " · "
-        } else {
-            ""
+        return when (val row = rows.getOrNull(position)) {
+            is Row.Header -> {
+                val views = RemoteViews(context.packageName, R.layout.widget_header)
+                views.setTextViewText(R.id.header_text, row.text)
+                views.setTextColor(R.id.header_text, if (row.big) accent else Palette.mutedColor(bg))
+                views.setTextViewTextSize(
+                    R.id.header_text, android.util.TypedValue.COMPLEX_UNIT_SP, if (row.big) 12f else 11f
+                )
+                views
+            }
+            is Row.Item -> {
+                val views = RemoteViews(context.packageName, R.layout.widget_item)
+                val entry = row.entry
+                views.setTextViewText(R.id.item_text, entry.task.displayText())
+                views.setTextColor(R.id.item_text, Palette.textColor(bg, entry.done))
+                views.setImageViewResource(
+                    R.id.item_check,
+                    if (entry.done) R.drawable.ic_check_on else R.drawable.ic_check_off
+                )
+                val fill = Intent().apply {
+                    putExtra(DayWidgetProvider.EXTRA_DAY, entry.day.name)
+                    putExtra(DayWidgetProvider.EXTRA_TASK_ID, entry.task.id)
+                }
+                views.setOnClickFillInIntent(R.id.item_root, fill)
+                views
+            }
+            null -> RemoteViews(context.packageName, R.layout.widget_item)
         }
-        views.setTextViewText(R.id.item_text, prefix + task.displayText())
-        views.setTextColor(R.id.item_text, Palette.textColor(bg, entry.done))
-        views.setImageViewResource(
-            R.id.item_check,
-            if (entry.done) R.drawable.ic_check_on else R.drawable.ic_check_off
-        )
-
-        val fill = Intent().apply {
-            putExtra(DayWidgetProvider.EXTRA_DAY, entry.day.name)
-            putExtra(DayWidgetProvider.EXTRA_TASK_ID, task.id)
-        }
-        views.setOnClickFillInIntent(R.id.item_root, fill)
-        return views
     }
 
     override fun getLoadingView(): RemoteViews? = null
 
-    override fun getViewTypeCount(): Int = 1
+    override fun getViewTypeCount(): Int = 2
 
     override fun getItemId(position: Int): Long = position.toLong()
 

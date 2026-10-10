@@ -2,6 +2,9 @@ package com.annesophie.semaine
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.TimePickerDialog
+import android.content.pm.PackageManager
+import android.os.Build
 import android.content.ClipboardManager
 import android.content.Intent
 import android.widget.Toast
@@ -35,6 +38,7 @@ class MainActivity : Activity() {
     private lateinit var list: LinearLayout
     private lateinit var input: EditText
     private lateinit var colorButton: TextView
+    private lateinit var reminderButton: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -84,6 +88,14 @@ class MainActivity : Activity() {
         }
         root.addView(colorButton)
 
+        reminderButton = TextView(this).apply {
+            textSize = 13f
+            setTextColor(ink)
+            setPadding(dp(4), dp(8), dp(4), 0)
+            setOnClickListener { showReminderDialog() }
+        }
+        root.addView(reminderButton)
+
         input = EditText(this).apply {
             hint = "Nouvelle tâche"
             isSingleLine = true
@@ -127,6 +139,15 @@ class MainActivity : Activity() {
         }
 
         render()
+
+        // Notifications (Android 13+) pour le rappel du soir
+        if (Build.VERSION.SDK_INT >= 33 && TaskStore.reminderEnabled(this) &&
+            checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 1)
+        }
+        ReminderReceiver.schedule(this)
+        DayWidgetProvider.refreshAll(this)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -214,22 +235,57 @@ class MainActivity : Activity() {
             .show()
     }
 
-    /** Choisir la couleur de fond de la case du jour affiché (ou de toutes les cases). */
-    private fun showColorDialog() {
+    /** Apparence : couleur + motif de la case du jour affiché (ou de toutes les cases). */
+    private fun showColorDialog(applyAll: Boolean = false) {
+        var dialog: AlertDialog? = null
         val allBox = CheckBox(this).apply {
             text = "Appliquer à toutes les cases"
             textSize = 14f
+            isChecked = applyAll
         }
-        val grid = LinearLayout(this).apply {
+        val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), dp(4))
         }
+        fun targets(): List<Day> = if (allBox.isChecked) Day.values().toList() else listOf(current)
+        fun reopen() {
+            val all = allBox.isChecked
+            dialog?.dismiss()
+            showColorDialog(all)
+        }
+        fun section(title: String) = TextView(this).apply {
+            text = title
+            textSize = 13f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(ink)
+            setPadding(0, dp(12), 0, dp(4))
+        }
+
+        // Thème en un geste
+        val theme = TextView(this).apply {
+            text = "🌿  Thème douceur champêtre\nune couleur pastel par jour"
+            textSize = 14f
+            setTextColor(ink)
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            background = pill(0xFFEFE7DA.toInt(), 14)
+            setOnClickListener {
+                Palette.champetre.forEach { (d, c) -> TaskStore.setColor(this@MainActivity, d, c) }
+                changed()
+                Toast.makeText(this@MainActivity, "Thème douceur champêtre appliqué 🌿", Toast.LENGTH_SHORT).show()
+                reopen()
+            }
+        }
+        content.addView(theme)
+        content.addView(allBox)
+
+        // Couleurs
+        content.addView(section("Couleur"))
         val selected = TaskStore.getColor(this, current)
-        var dialog: AlertDialog? = null
         val perRow = 4
         Palette.colors.chunked(perRow).forEach { rowColors ->
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             rowColors.forEach { (name, color) ->
+                val isSel = color == selected
                 val cell = LinearLayout(this).apply {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER_HORIZONTAL
@@ -240,10 +296,10 @@ class MainActivity : Activity() {
                     val d = GradientDrawable()
                     d.shape = GradientDrawable.OVAL
                     d.setColor(color)
-                    d.setStroke(dp(if (color == selected) 3 else 1), if (color == selected) ink else 0xFFCCCCCC.toInt())
+                    d.setStroke(dp(if (isSel) 3 else 1), if (isSel) ink else 0xFFCCCCCC.toInt())
                     background = d
                     gravity = Gravity.CENTER
-                    text = if (color == selected) "✓" else ""
+                    text = if (isSel) "✓" else ""
                     setTextColor(Palette.textColor(color))
                     layoutParams = LinearLayout.LayoutParams(dp(40), dp(40))
                 }
@@ -257,28 +313,113 @@ class MainActivity : Activity() {
                 cell.addView(swatch)
                 cell.addView(label)
                 cell.setOnClickListener {
-                    val days = if (allBox.isChecked) Day.values().toList() else listOf(current)
-                    days.forEach { TaskStore.setColor(this, it, color) }
+                    targets().forEach { TaskStore.setColor(this@MainActivity, it, color) }
                     changed()
-                    dialog?.dismiss()
+                    reopen()
                 }
                 row.addView(cell)
             }
-            // Complète la dernière ligne pour garder l'alignement
             repeat(perRow - rowColors.size) {
                 row.addView(android.view.View(this).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) })
             }
-            grid.addView(row)
+            content.addView(row)
         }
-        grid.addView(allBox)
+
+        // Motifs
+        content.addView(section("Motif"))
+        val bg = TaskStore.getColor(this, current)
+        val tint = Palette.titleColor(bg, current)
+        val selDecor = TaskStore.getDecor(this, current)
+        Palette.decors.chunked(3).forEach { rowDecors ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            rowDecors.forEach { (key, name, res) ->
+                val isSel = key == selDecor
+                val cell = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER_HORIZONTAL
+                    setPadding(dp(4), dp(8), dp(4), dp(8))
+                    layoutParams = LinearLayout.LayoutParams(0, wrap, 1f)
+                    background = pill(if (isSel) 0xFFEFE7DA.toInt() else Color.TRANSPARENT, 12)
+                }
+                val frame = LinearLayout(this).apply {
+                    gravity = Gravity.CENTER
+                    val d = GradientDrawable()
+                    d.cornerRadius = dp(10).toFloat()
+                    d.setColor(Palette.opaque(bg))
+                    d.setStroke(dp(1), 0xFFDDDDDD.toInt())
+                    background = d
+                    layoutParams = LinearLayout.LayoutParams(dp(52), dp(52))
+                }
+                if (res != 0) {
+                    val img = ImageView(this).apply {
+                        setImageResource(res)
+                        setColorFilter(tint)
+                        layoutParams = LinearLayout.LayoutParams(dp(34), dp(34))
+                    }
+                    frame.addView(img)
+                } else {
+                    frame.addView(TextView(this).apply { text = "—"; setTextColor(grey) })
+                }
+                val label = TextView(this).apply {
+                    text = if (isSel) "✓ $name" else name
+                    textSize = 11f
+                    gravity = Gravity.CENTER
+                    setTextColor(if (isSel) ink else grey)
+                    setPadding(0, dp(4), 0, 0)
+                }
+                cell.addView(frame)
+                cell.addView(label)
+                cell.setOnClickListener {
+                    targets().forEach { TaskStore.setDecor(this@MainActivity, it, key) }
+                    changed()
+                    reopen()
+                }
+                row.addView(cell)
+            }
+            content.addView(row)
+        }
+
         val scroll = ScrollView(this)
-        scroll.addView(grid)
+        scroll.addView(content)
         dialog = AlertDialog.Builder(this)
-            .setTitle("Couleur — ${current.label}")
+            .setTitle("Apparence — ${current.label}")
             .setView(scroll)
-            .setNegativeButton("Fermer", null)
+            .setPositiveButton("Fermer", null)
             .show()
     }
+
+    /** Rappel du soir : heure et activation. */
+    private fun showReminderDialog() {
+        val on = TaskStore.reminderEnabled(this)
+        val minutes = TaskStore.reminderMinutes(this)
+        val options = arrayOf(
+            "Changer l'heure (${hhmm(minutes)})",
+            if (on) "Désactiver le rappel" else "Activer le rappel"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("🔔 Rappel du soir")
+            .setItems(options) { _, which ->
+                if (which == 0) {
+                    TimePickerDialog(this, { _, h, m ->
+                        TaskStore.setReminder(this, true, h * 60 + m)
+                        ReminderReceiver.schedule(this)
+                        render()
+                    }, minutes / 60, minutes % 60, true).show()
+                } else {
+                    TaskStore.setReminder(this, !on, minutes)
+                    ReminderReceiver.schedule(this)
+                    if (!on && Build.VERSION.SDK_INT >= 33 &&
+                        checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 1)
+                    }
+                    render()
+                }
+            }
+            .show()
+    }
+
+    private fun hhmm(minutes: Int): String = String.format("%02d:%02d", minutes / 60, minutes % 60)
 
     private fun pill(color: Int, radius: Int): GradientDrawable {
         val d = GradientDrawable()
@@ -310,38 +451,39 @@ class MainActivity : Activity() {
             dayBar.addView(chip)
         }
 
-        // Bouton couleur avec aperçu
+        // Boutons Apparence et Rappel
         val currentColor = TaskStore.getColor(this, current)
         val colorName = Palette.colors.firstOrNull { it.second == currentColor }?.first ?: "Personnalisée"
-        colorButton.text = "🎨  Couleur de la case ${current.label} : $colorName  ›"
+        val decorName = Palette.decorName(TaskStore.getDecor(this, current))
+        colorButton.text = "🎨  Apparence ${current.label} : $colorName · $decorName  ›"
+        reminderButton.text = if (TaskStore.reminderEnabled(this))
+            "🔔  Rappel du soir : ${hhmm(TaskStore.reminderMinutes(this))}  ›"
+        else "🔕  Rappel du soir : désactivé  ›"
 
         // Liste du jour sélectionné
         list.removeAllViews()
-        val entries = TaskStore.entries(this, current, false)
-        if (entries.isEmpty()) {
+        val rows = TaskStore.rows(this, current.sources, false)
+        if (rows.isEmpty()) {
             val empty = TextView(this)
             empty.text = "Aucune tâche pour ${current.label.lowercase()}"
             empty.setTextColor(grey)
             empty.setPadding(dp(4), dp(16), 0, 0)
             list.addView(empty)
         }
-        var lastSource: Day? = null
-        val multi = current.sources.size > 1
-        entries.forEach { entry ->
+        rows.forEach { r ->
+            if (r is Row.Header) {
+                val header = TextView(this)
+                header.text = r.text
+                header.textSize = if (r.big) 13f else 12f
+                header.setTypeface(null, Typeface.BOLD)
+                header.setTextColor(if (r.big) current.color else grey)
+                header.setPadding(dp(4), dp(if (r.big) 14 else 8), 0, dp(6))
+                list.addView(header)
+                return@forEach
+            }
+            val entry = (r as Row.Item).entry
             val task = entry.task
             val done = entry.done
-
-            // Week-end : petits intertitres Samedi / Dimanche / Week-end
-            if (multi && entry.day != lastSource) {
-                val header = TextView(this)
-                header.text = entry.day.label.uppercase()
-                header.textSize = 12f
-                header.setTypeface(null, Typeface.BOLD)
-                header.setTextColor(entry.day.color)
-                header.setPadding(dp(4), dp(10), 0, dp(6))
-                list.addView(header)
-                lastSource = entry.day
-            }
 
             val row = LinearLayout(this)
             row.orientation = LinearLayout.HORIZONTAL

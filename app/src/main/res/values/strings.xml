@@ -3,4 +3,6 @@
     <string name="app_name">Ma semaine</string>
     <string name="widget_name">Jour de la semaine</string>
     <string name="widget_desc">Les tâches d\'un jour, à cocher depuis l\'écran d\'accueil</string>
+    <string name="today_name">Aujourd\'hui</string>
+    <string name="today_desc">Les tâches du jour, change toute seule à minuit</string>
 </resources>

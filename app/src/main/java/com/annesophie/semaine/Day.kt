@@ -44,6 +44,12 @@ enum class Day(val label: String, val short: String, val color: Int, val offset:
             else -> SUN
         }
 
+        /** Listes affichées par le widget "Aujourd'hui" (le week-end : le jour + la liste Week-end). */
+        fun todaySources(): List<Day> {
+            val t = today()
+            return if (t == SAT || t == SUN) listOf(t, WEEKEND) else listOf(t)
+        }
+
         /** Lundi de la semaine en cours. */
         fun weekStart(): LocalDate {
             val now = LocalDate.now()
