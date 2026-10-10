@@ -3,7 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- Fond de la case : sa couleur est changée depuis l'appli -->
+    <!-- Fond arrondi (couleur choisie dans l'appli) -->
     <ImageView
         android:id="@+id/widget_bg"
         android:layout_width="match_parent"
@@ -11,53 +11,87 @@
         android:scaleType="fitXY"
         android:src="@drawable/widget_bg" />
 
-    <!-- Motif décoratif discret en bas à droite -->
+    <!-- Motif discret, en filigrane -->
     <ImageView
         android:id="@+id/deco"
-        android:layout_width="44dp"
-        android:layout_height="44dp"
+        android:layout_width="38dp"
+        android:layout_height="38dp"
         android:layout_gravity="bottom|end"
-        android:layout_margin="8dp"
+        android:layout_margin="10dp"
         android:visibility="gone" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="12dp">
+        android:paddingStart="16dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="10dp">
 
+        <!-- En-tête : Lundi •      6   + -->
         <LinearLayout
-            android:id="@+id/header"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <TextView
-                android:id="@+id/day_title"
+            <LinearLayout
+                android:id="@+id/header"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:maxLines="1"
-                android:text="LUN"
-                android:textColor="#F5A623"
-                android:textSize="13sp"
-                android:textStyle="bold" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/day_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/lora_medium"
+                    android:includeFontPadding="false"
+                    android:maxLines="1"
+                    android:text="Lundi"
+                    android:textColor="#7A4B4B"
+                    android:textSize="17sp" />
+
+                <TextView
+                    android:id="@+id/today_dot"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="5dp"
+                    android:text="•"
+                    android:textColor="#7A4B4B"
+                    android:textSize="15sp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day_count"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/worksans_regular"
+                    android:paddingStart="8dp"
+                    android:text="0"
+                    android:textColor="#8A8A8A"
+                    android:textSize="12sp" />
+            </LinearLayout>
 
             <TextView
-                android:id="@+id/day_count"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="0"
-                android:textColor="#222222"
-                android:textSize="18sp"
-                android:textStyle="bold" />
+                android:id="@+id/add_button"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:fontFamily="@font/worksans_regular"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:text="+"
+                android:textColor="#8A8A8A"
+                android:textSize="21sp" />
         </LinearLayout>
 
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="4dp"
             android:layout_weight="1">
 
             <ListView
@@ -72,20 +106,12 @@
                 android:id="@+id/empty_view"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
+                android:fontFamily="@font/lora_italic"
                 android:gravity="top|start"
-                android:text="Aucune tâche"
-                android:textColor="#9A9A9A"
-                android:textSize="12sp" />
+                android:paddingTop="6dp"
+                android:text="Rien de prévu"
+                android:textColor="#8A8A8A"
+                android:textSize="13sp" />
         </FrameLayout>
-
-        <TextView
-            android:id="@+id/add_button"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:paddingTop="6dp"
-            android:text="+  Ajouter"
-            android:textColor="#9A9A9A"
-            android:textSize="12sp" />
     </LinearLayout>
 </FrameLayout>

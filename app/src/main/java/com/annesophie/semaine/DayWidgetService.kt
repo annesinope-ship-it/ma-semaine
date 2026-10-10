@@ -44,12 +44,10 @@ class TaskFactory(
     override fun getViewAt(position: Int): RemoteViews {
         return when (val row = rows.getOrNull(position)) {
             is Row.Header -> {
-                val views = RemoteViews(context.packageName, R.layout.widget_header)
+                val layout = if (row.big) R.layout.widget_dayheader else R.layout.widget_header
+                val views = RemoteViews(context.packageName, layout)
                 views.setTextViewText(R.id.header_text, row.text)
                 views.setTextColor(R.id.header_text, if (row.big) accent else Palette.mutedColor(bg))
-                views.setTextViewTextSize(
-                    R.id.header_text, android.util.TypedValue.COMPLEX_UNIT_SP, if (row.big) 12f else 11f
-                )
                 views
             }
             is Row.Item -> {
@@ -74,7 +72,7 @@ class TaskFactory(
 
     override fun getLoadingView(): RemoteViews? = null
 
-    override fun getViewTypeCount(): Int = 2
+    override fun getViewTypeCount(): Int = 3
 
     override fun getItemId(position: Int): Long = position.toLong()
 

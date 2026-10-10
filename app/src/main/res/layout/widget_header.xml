@@ -3,9 +3,11 @@
     android:id="@+id/header_text"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:paddingTop="6dp"
-    android:paddingBottom="2dp"
+    android:fontFamily="@font/worksans_medium"
+    android:letterSpacing="0.14"
     android:maxLines="1"
+    android:paddingTop="8dp"
+    android:paddingBottom="1dp"
+    android:textAllCaps="true"
     android:textColor="#8A8A8A"
-    android:textSize="11sp"
-    android:textStyle="bold" />
+    android:textSize="9.5sp" />

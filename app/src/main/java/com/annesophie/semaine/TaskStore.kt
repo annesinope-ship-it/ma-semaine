@@ -54,9 +54,9 @@ data class Task(
 private val LEADING_SYMBOLS = Regex("^(?:☀|☾|🌙|\\uFE0F|\\s)+")
 
 enum class Period(val label: String) {
-    NONE("✦ À faire"),
-    MORNING("☀ Matin"),
-    EVENING("☾ Soir")
+    NONE(""),
+    MORNING("Matin"),
+    EVENING("Soir")
 }
 
 /** Une ligne affichée : intertitre (jour ou moment) ou tâche. */
@@ -174,12 +174,12 @@ object TaskStore {
         sources.forEach { src ->
             val list = entries(c, listOf(src), onlyThisWeek)
             if (list.isEmpty()) return@forEach
-            if (multi) out.add(Row.Header(src.label.uppercase(), true))
+            if (multi) out.add(Row.Header(src.label, true))
             val groups = list.groupBy { it.task.period() }
             val tagged = groups.keys.any { it != Period.NONE }
             Period.values().forEach { p ->
                 val group = groups[p] ?: return@forEach
-                if (tagged) out.add(Row.Header(p.label, false))
+                if (tagged && p != Period.NONE) out.add(Row.Header(p.label, false))
                 group.sortedBy { it.done }.forEach { out.add(Row.Item(it)) }
             }
         }

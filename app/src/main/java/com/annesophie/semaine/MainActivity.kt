@@ -33,6 +33,11 @@ class MainActivity : Activity() {
     private val grey = 0xFF9A9A9A.toInt()
     private val ink = 0xFF222222.toInt()
 
+    private val lora by lazy { resources.getFont(R.font.lora_medium) }
+    private val loraItalic by lazy { resources.getFont(R.font.lora_italic) }
+    private val sans by lazy { resources.getFont(R.font.worksans_regular) }
+    private val sansMedium by lazy { resources.getFont(R.font.worksans_medium) }
+
     private var current = Day.today()
     private lateinit var dayBar: LinearLayout
     private lateinit var list: LinearLayout
@@ -53,15 +58,15 @@ class MainActivity : Activity() {
 
         val title = TextView(this).apply {
             text = "Ma semaine"
-            textSize = 28f
-            setTypeface(typeface, Typeface.BOLD)
+            textSize = 30f
+            typeface = lora
             setTextColor(ink)
             layoutParams = LinearLayout.LayoutParams(0, wrap, 1f)
         }
         val pasteButton = TextView(this).apply {
-            text = "📋  Coller une liste"
-            textSize = 14f
-            setTypeface(typeface, Typeface.BOLD)
+            text = "Coller une liste"
+            textSize = 13f
+            typeface = sansMedium
             setTextColor(ink)
             setPadding(dp(14), dp(8), dp(14), dp(8))
             background = pill(Color.WHITE, 18)
@@ -82,6 +87,7 @@ class MainActivity : Activity() {
         root.addView(dayScroll)
 
         colorButton = TextView(this).apply {
+            typeface = sans
             textSize = 13f
             setTextColor(ink)
             setPadding(dp(4), dp(10), dp(4), 0)
@@ -90,6 +96,7 @@ class MainActivity : Activity() {
         root.addView(colorButton)
 
         reminderButton = TextView(this).apply {
+            typeface = sans
             textSize = 13f
             setTextColor(ink)
             setPadding(dp(4), dp(8), dp(4), 0)
@@ -442,8 +449,8 @@ class MainActivity : Activity() {
             val selected = day == current
             val chip = TextView(this)
             chip.text = if (count > 0) "${day.short}  $count" else day.short
-            chip.textSize = 14f
-            chip.setTypeface(null, Typeface.BOLD)
+            chip.textSize = 13f
+            chip.typeface = sansMedium
             chip.setPadding(dp(14), dp(8), dp(14), dp(8))
             chip.setTextColor(if (selected) Color.WHITE else day.color)
             chip.background = pill(if (selected) day.color else Color.WHITE, 18)
@@ -461,17 +468,19 @@ class MainActivity : Activity() {
         val currentColor = TaskStore.getColor(this, current)
         val colorName = Palette.colors.firstOrNull { it.second == currentColor }?.first ?: "Personnalisée"
         val decorName = Palette.decorName(TaskStore.getDecor(this, current))
-        colorButton.text = "🎨  Apparence ${current.label} : $colorName · $decorName  ›"
+        colorButton.text = "Apparence  ·  $colorName, ${decorName.lowercase()}  ›"
         reminderButton.text = if (TaskStore.reminderEnabled(this))
-            "🔔  Rappel du soir : ${hhmm(TaskStore.reminderMinutes(this))}  ›"
-        else "🔕  Rappel du soir : désactivé  ›"
+            "Rappel du soir  ·  ${hhmm(TaskStore.reminderMinutes(this))}  ›"
+        else "Rappel du soir  ·  désactivé  ›"
 
         // Liste du jour sélectionné
         list.removeAllViews()
         val rows = TaskStore.rows(this, current.sources, false)
         if (rows.isEmpty()) {
             val empty = TextView(this)
-            empty.text = "Aucune tâche pour ${current.label.lowercase()}"
+            empty.text = "Rien de prévu ${if (current == Day.WEEKEND) "ce week-end" else current.label.lowercase()}"
+            empty.typeface = loraItalic
+            empty.textSize = 15f
             empty.setTextColor(grey)
             empty.setPadding(dp(4), dp(16), 0, 0)
             list.addView(empty)
@@ -479,9 +488,10 @@ class MainActivity : Activity() {
         rows.forEach { r ->
             if (r is Row.Header) {
                 val header = TextView(this)
-                header.text = r.text
-                header.textSize = if (r.big) 13f else 12f
-                header.setTypeface(null, Typeface.BOLD)
+                header.text = if (r.big) r.text else r.text.uppercase()
+                header.textSize = if (r.big) 16f else 11f
+                header.typeface = if (r.big) loraItalic else sansMedium
+                header.letterSpacing = if (r.big) 0f else 0.14f
                 header.setTextColor(if (r.big) current.color else grey)
                 header.setPadding(dp(4), dp(if (r.big) 14 else 8), 0, dp(6))
                 list.addView(header)
@@ -505,8 +515,9 @@ class MainActivity : Activity() {
             check.layoutParams = LinearLayout.LayoutParams(dp(24), dp(24))
 
             val label = TextView(this)
-            label.text = if (task.routine) "${task.displayText()}  🔁" else task.displayText()
-            label.textSize = 16f
+            label.text = task.displayText()
+            label.textSize = 15f
+            label.typeface = sans
             label.setTextColor(if (done) grey else ink)
             if (done) label.paintFlags = label.paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
             label.setPadding(dp(12), 0, dp(8), 0)

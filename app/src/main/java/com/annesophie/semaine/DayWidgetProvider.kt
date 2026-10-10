@@ -79,11 +79,11 @@ class DayWidgetProvider : AppWidgetProvider() {
 
         /** Motif dessiné en image, teinté et transparent. */
         fun decorBitmap(context: Context, res: Int, tint: Int): android.graphics.Bitmap {
-            val size = (44 * context.resources.displayMetrics.density).toInt()
+            val size = (38 * context.resources.displayMetrics.density).toInt()
             val bmp = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
             val d = context.getDrawable(res)!!.mutate()
             d.setTint(tint)
-            d.alpha = 70
+            d.alpha = 55
             d.setBounds(0, 0, size, size)
             d.draw(android.graphics.Canvas(bmp))
             return bmp
@@ -100,7 +100,7 @@ class DayWidgetProvider : AppWidgetProvider() {
             // Fond : forme arrondie déjà colorée (méthode standard, compatible tous lanceurs)
             views.setImageViewResource(R.id.widget_bg, backgroundRes(context, bg))
             views.setTextColor(R.id.day_title, accent)
-            views.setTextColor(R.id.day_count, Palette.textColor(bg))
+            views.setTextColor(R.id.day_count, Palette.mutedColor(bg))
             views.setTextColor(R.id.empty_view, Palette.mutedColor(bg))
             views.setTextColor(R.id.add_button, Palette.mutedColor(bg))
 
@@ -113,14 +113,13 @@ class DayWidgetProvider : AppWidgetProvider() {
                 views.setViewVisibility(R.id.deco, View.GONE)
             }
 
-            // En-tête : nom du jour + nombre de tâches restantes
-            val title = when {
-                todayMode -> "AUJOURD'HUI · ${day.label.uppercase()}"
-                day.isToday() -> "● ${day.short}"
-                else -> day.short
-            }
-            views.setTextViewText(R.id.day_title, title)
-            views.setTextViewText(R.id.day_count, TaskStore.remaining(context, sources).toString())
+            // En-tête : Lundi •   6   +
+            views.setTextViewText(R.id.day_title, day.label)
+            val showDot = todayMode || day.isToday()
+            views.setViewVisibility(R.id.today_dot, if (showDot) View.VISIBLE else View.GONE)
+            views.setTextColor(R.id.today_dot, accent)
+            val left = TaskStore.remaining(context, sources)
+            views.setTextViewText(R.id.day_count, if (left > 0) left.toString() else "✓")
 
             // Liste des tâches
             val serviceIntent = Intent(context, DayWidgetService::class.java).apply {
