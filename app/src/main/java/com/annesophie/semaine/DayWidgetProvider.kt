@@ -47,6 +47,7 @@ class DayWidgetProvider : AppWidgetProvider() {
 
         /** Met à jour tous les widgets (jours + Aujourd'hui) et programme le passage de minuit. */
         fun refreshAll(context: Context) {
+            RoutineDefaults.seedIfNeeded(context)
             val manager = AppWidgetManager.getInstance(context)
             val dayIds = manager.getAppWidgetIds(ComponentName(context, DayWidgetProvider::class.java))
             val todayIds = manager.getAppWidgetIds(ComponentName(context, TodayWidgetProvider::class.java))

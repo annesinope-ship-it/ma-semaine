@@ -43,6 +43,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         intent.getStringExtra(DayWidgetProvider.EXTRA_DAY)?.let { current = Day.from(it) }
+        RoutineDefaults.seedIfNeeded(this)
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -218,6 +219,11 @@ class MainActivity : Activity() {
             .setTitle("Coller une liste")
             .setView(content)
             .setNegativeButton("Annuler", null)
+            .setNeutralButton("Ma routine d'origine") { _, _ ->
+                RoutineDefaults.load(this)
+                changed()
+                Toast.makeText(this, "Routine d'origine rechargée 🔁", Toast.LENGTH_SHORT).show()
+            }
             .setPositiveButton("Ajouter") { _, _ ->
                 val items = WeekParser.parse(box.text.toString(), current)
                 val routine = routineBox.isChecked
