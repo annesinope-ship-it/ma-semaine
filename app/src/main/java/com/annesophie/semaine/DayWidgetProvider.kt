@@ -70,6 +70,25 @@ class DayWidgetProvider : AppWidgetProvider() {
             am.setAndAllowWhileIdle(AlarmManager.RTC, next, pi)
         }
 
+        /** Fond arrondi correspondant à la couleur (bg_aarrggbb), blanc par défaut. */
+        fun backgroundRes(context: Context, color: Int): Int {
+            val name = "bg_" + String.format("%08x", color)
+            val id = context.resources.getIdentifier(name, "drawable", context.packageName)
+            return if (id != 0) id else R.drawable.widget_bg
+        }
+
+        /** Motif dessiné en image, teinté et transparent. */
+        fun decorBitmap(context: Context, res: Int, tint: Int): android.graphics.Bitmap {
+            val size = (44 * context.resources.displayMetrics.density).toInt()
+            val bmp = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+            val d = context.getDrawable(res)!!.mutate()
+            d.setTint(tint)
+            d.alpha = 70
+            d.setBounds(0, 0, size, size)
+            d.draw(android.graphics.Canvas(bmp))
+            return bmp
+        }
+
         fun render(context: Context, manager: AppWidgetManager, widgetId: Int, todayMode: Boolean) {
             val day = if (todayMode) Day.today() else TaskStore.getWidgetDay(context, widgetId)
             val sources = if (todayMode) Day.todaySources() else day.sources
@@ -78,8 +97,8 @@ class DayWidgetProvider : AppWidgetProvider() {
             // Couleurs de la case
             val bg = TaskStore.getColor(context, day)
             val accent = Palette.titleColor(bg, day)
-            views.setInt(R.id.widget_bg, "setColorFilter", Palette.opaque(bg))
-            views.setInt(R.id.widget_bg, "setImageAlpha", Color.alpha(bg))
+            // Fond : forme arrondie déjà colorée (méthode standard, compatible tous lanceurs)
+            views.setImageViewResource(R.id.widget_bg, backgroundRes(context, bg))
             views.setTextColor(R.id.day_title, accent)
             views.setTextColor(R.id.day_count, Palette.textColor(bg))
             views.setTextColor(R.id.empty_view, Palette.mutedColor(bg))
@@ -89,9 +108,7 @@ class DayWidgetProvider : AppWidgetProvider() {
             val decor = Palette.decorRes(TaskStore.getDecor(context, day))
             if (decor != 0) {
                 views.setViewVisibility(R.id.deco, View.VISIBLE)
-                views.setImageViewResource(R.id.deco, decor)
-                views.setInt(R.id.deco, "setColorFilter", accent)
-                views.setInt(R.id.deco, "setImageAlpha", 70)
+                views.setImageViewBitmap(R.id.deco, decorBitmap(context, decor, accent))
             } else {
                 views.setViewVisibility(R.id.deco, View.GONE)
             }

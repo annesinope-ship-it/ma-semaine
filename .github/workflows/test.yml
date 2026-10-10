@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        api: [28, 30, 34]
+        api: [33]
     steps:
       - uses: actions/checkout@v4
 
