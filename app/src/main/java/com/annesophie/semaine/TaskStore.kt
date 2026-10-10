@@ -18,7 +18,8 @@ data class Task(
     val done: Boolean,
     val routine: Boolean = false,
     val doneOn: String = "",
-    val nth: Int = 0
+    val nth: Int = 0,
+    val detail: String = ""
 ) {
     fun isDone(): Boolean =
         if (routine) doneOn.isNotEmpty() && doneOn >= Day.weekStart().toString() else done
@@ -35,6 +36,16 @@ data class Task(
 
     /** Texte sans le symbole ☀ / ☾ du début. */
     fun cleanText(): String = text.replace(LEADING_SYMBOLS, "").ifBlank { text }
+
+    /** Mention mensuelle ("1er dimanche du mois"…) ou vide. */
+    fun monthlyLabel(): String = when (nth) {
+        0 -> ""
+        1 -> "1er du mois"
+        else -> "${nth}e du mois"
+    }
+
+    /** Texte court pour le widget (sans mention mensuelle : le widget ne l'affiche que la bonne semaine). */
+    fun widgetText(): String = cleanText()
 
     /** Texte affiché, avec la mention "1er du mois" si besoin. */
     fun displayText(): String = when (nth) {
@@ -89,7 +100,8 @@ object TaskStore {
                 done = o.optBoolean("done", false),
                 routine = o.optBoolean("routine", false),
                 doneOn = o.optString("doneOn", ""),
-                nth = o.optInt("nth", 0)
+                nth = o.optInt("nth", 0),
+                detail = o.optString("detail", "")
             )
         }
     }
@@ -105,6 +117,7 @@ object TaskStore {
                     .put("routine", it.routine)
                     .put("doneOn", it.doneOn)
                     .put("nth", it.nth)
+                    .put("detail", it.detail)
             )
         }
         prefs(c).edit().putString("tasks_${day.name}", arr.toString()).commit()
@@ -125,10 +138,24 @@ object TaskStore {
                 .map { Entry(src, it) }
         }
 
-    fun add(c: Context, day: Day, text: String, routine: Boolean = false, nth: Int = 0) {
+    fun add(c: Context, day: Day, text: String, routine: Boolean = false, nth: Int = 0, detail: String = "") {
         val clean = text.trim()
         if (clean.isEmpty()) return
-        save(c, day, getTasks(c, day) + Task(UUID.randomUUID().toString(), clean, false, routine, "", nth))
+        save(c, day, getTasks(c, day) + Task(UUID.randomUUID().toString(), clean, false, routine, "", nth, detail.trim()))
+    }
+
+    /** Modifie une tâche (et la déplace si le jour change). */
+    fun update(c: Context, day: Day, id: String, newDay: Day, text: String, detail: String, routine: Boolean) {
+        val clean = text.trim()
+        if (clean.isEmpty()) return
+        val old = getTasks(c, day).firstOrNull { it.id == id } ?: return
+        val updated = old.copy(text = clean, detail = detail.trim(), routine = routine)
+        if (newDay == day) {
+            save(c, day, getTasks(c, day).map { if (it.id == id) updated else it })
+        } else {
+            save(c, day, getTasks(c, day).filter { it.id != id })
+            save(c, newDay, getTasks(c, newDay) + updated)
+        }
     }
 
     fun toggle(c: Context, day: Day, id: String) {

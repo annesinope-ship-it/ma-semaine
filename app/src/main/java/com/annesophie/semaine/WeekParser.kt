@@ -2,7 +2,7 @@ package com.annesophie.semaine
 
 import java.text.Normalizer
 
-data class ParsedTask(val day: Day, val text: String, val nth: Int = 0)
+data class ParsedTask(val day: Day, val text: String, val nth: Int = 0, val detail: String = "")
 
 /**
  * Transforme un texte collé en tâches par jour.
@@ -50,14 +50,17 @@ object WeekParser {
         s.trim().trimStart('-', '•', '*', '–', '—', '·', '☐', '□', ' ').trim()
 
     private fun toTask(day: Day, raw: String): ParsedTask? {
-        val t = cleanTask(raw)
+        // "Titre court | détail" : le détail n'apparaît que dans l'appli
+        val parts = raw.split(" | ", limit = 2)
+        val t = cleanTask(parts[0])
+        val detail = parts.getOrNull(1)?.trim() ?: ""
         if (t.isEmpty()) return null
         val m = monthly.find(t)
         if (m != null) {
             val n = m.groupValues[1].toIntOrNull()?.coerceIn(1, 5) ?: 0
-            return ParsedTask(day, m.groupValues[2].trim(), n)
+            return ParsedTask(day, m.groupValues[2].trim(), n, detail)
         }
-        return ParsedTask(day, t)
+        return ParsedTask(day, t, 0, detail)
     }
 
     fun parse(text: String, defaultDay: Day): List<ParsedTask> {

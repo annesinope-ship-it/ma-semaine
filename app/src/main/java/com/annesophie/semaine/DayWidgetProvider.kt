@@ -79,11 +79,11 @@ class DayWidgetProvider : AppWidgetProvider() {
 
         /** Motif dessiné en image, teinté et transparent. */
         fun decorBitmap(context: Context, res: Int, tint: Int): android.graphics.Bitmap {
-            val size = (38 * context.resources.displayMetrics.density).toInt()
+            val size = (17 * context.resources.displayMetrics.density).toInt()
             val bmp = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
             val d = context.getDrawable(res)!!.mutate()
             d.setTint(tint)
-            d.alpha = 55
+            d.alpha = 150
             d.setBounds(0, 0, size, size)
             d.draw(android.graphics.Canvas(bmp))
             return bmp

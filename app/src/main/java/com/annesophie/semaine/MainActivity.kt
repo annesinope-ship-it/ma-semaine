@@ -235,7 +235,7 @@ class MainActivity : Activity() {
                 val items = WeekParser.parse(box.text.toString(), current)
                 val routine = routineBox.isChecked
                 if (routine) TaskStore.clearRoutine(this, items.map { it.day }.toSet())
-                items.forEach { TaskStore.add(this, it.day, it.text, routine, it.nth) }
+                items.forEach { TaskStore.add(this, it.day, it.text, routine, it.nth, it.detail) }
                 changed()
                 val days = items.map { it.day }.distinct().size
                 Toast.makeText(
@@ -514,34 +514,166 @@ class MainActivity : Activity() {
             check.setImageResource(if (done) R.drawable.ic_check_on else R.drawable.ic_check_off)
             check.layoutParams = LinearLayout.LayoutParams(dp(24), dp(24))
 
+            // Titre + détail (le détail et la mention mensuelle n'apparaissent que dans l'appli)
+            val textCol = LinearLayout(this)
+            textCol.orientation = LinearLayout.VERTICAL
+            textCol.setPadding(dp(12), 0, dp(8), 0)
+            textCol.layoutParams = LinearLayout.LayoutParams(0, wrap, 1f)
             val label = TextView(this)
-            label.text = task.displayText()
+            label.text = task.cleanText()
             label.textSize = 15f
             label.typeface = sans
             label.setTextColor(if (done) grey else ink)
             if (done) label.paintFlags = label.paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
-            label.setPadding(dp(12), 0, dp(8), 0)
-            label.layoutParams = LinearLayout.LayoutParams(0, wrap, 1f)
-
-            val delete = TextView(this)
-            delete.text = "✕"
-            delete.textSize = 16f
-            delete.setTextColor(grey)
-            delete.setPadding(dp(8), dp(4), dp(8), dp(4))
-            delete.setOnClickListener {
-                TaskStore.delete(this, entry.day, task.id)
-                changed()
+            textCol.addView(label)
+            val sub = listOf(task.detail, task.monthlyLabel()).filter { it.isNotBlank() }.joinToString(" · ")
+            if (sub.isNotEmpty()) {
+                val detail = TextView(this)
+                detail.text = sub
+                detail.textSize = 12.5f
+                detail.typeface = sans
+                detail.setTextColor(grey)
+                detail.setPadding(0, dp(2), 0, 0)
+                textCol.addView(detail)
             }
 
-            row.setOnClickListener {
+            val edit = TextView(this)
+            edit.text = "›"
+            edit.textSize = 20f
+            edit.setTextColor(0xFFBBBBBB.toInt())
+            edit.setPadding(dp(8), 0, dp(6), 0)
+
+            // Toucher le rond = cocher ; toucher le reste = modifier
+            val checkZone = LinearLayout(this)
+            checkZone.gravity = Gravity.CENTER
+            checkZone.setPadding(dp(2), dp(6), dp(2), dp(6))
+            checkZone.addView(check)
+            checkZone.setOnClickListener {
                 TaskStore.toggle(this, entry.day, task.id)
                 changed()
             }
+            row.setOnClickListener { showEditDialog(entry) }
 
-            row.addView(check)
-            row.addView(label)
-            row.addView(delete)
+            row.addView(checkZone)
+            row.addView(textCol)
+            row.addView(edit)
             list.addView(row)
         }
+    }
+
+    /** Modifier une tâche : intitulé, détail, moment, jour, routine, suppression. */
+    private fun showEditDialog(entry: Entry) {
+        val task = entry.task
+        var moment = when (task.period()) {
+            Period.MORNING -> "☀ "
+            Period.EVENING -> "☾ "
+            Period.NONE -> ""
+        }
+        var day = entry.day
+
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        fun label(t: String) = TextView(this).apply {
+            text = t.uppercase()
+            textSize = 10.5f
+            typeface = sansMedium
+            letterSpacing = 0.14f
+            setTextColor(grey)
+            setPadding(0, dp(12), 0, dp(2))
+        }
+        fun chipRow(options: List<Pair<String, String>>, selected: () -> String, onPick: (String) -> Unit): HorizontalScrollView {
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            val views = mutableListOf<Pair<String, TextView>>()
+            fun paint() = views.forEach { (k, v) ->
+                val sel = k == selected()
+                v.background = pill(if (sel) ink else 0xFFF0EEEA.toInt(), 14)
+                v.setTextColor(if (sel) Color.WHITE else ink)
+            }
+            options.forEach { (key, txt) ->
+                val v = TextView(this).apply {
+                    text = txt
+                    textSize = 13f
+                    typeface = sans
+                    setPadding(dp(12), dp(6), dp(12), dp(6))
+                    val lp = LinearLayout.LayoutParams(wrap, wrap)
+                    lp.marginEnd = dp(6)
+                    layoutParams = lp
+                }
+                v.setOnClickListener { onPick(key); paint() }
+                views.add(key to v)
+                row.addView(v)
+            }
+            paint()
+            val sc = HorizontalScrollView(this)
+            sc.isHorizontalScrollBarEnabled = false
+            sc.addView(row)
+            return sc
+        }
+
+        val titleBox = EditText(this).apply {
+            setText(task.cleanText())
+            typeface = sans
+            isSingleLine = true
+        }
+        val detailBox = EditText(this).apply {
+            setText(task.detail)
+            hint = "Détail (visible seulement dans l'appli)"
+            typeface = sans
+            textSize = 14f
+        }
+        val routineBox = CheckBox(this).apply {
+            text = "Revient chaque semaine (routine)"
+            isChecked = task.routine
+        }
+
+        content.addView(label("Intitulé (court, pour le widget)"))
+        content.addView(titleBox)
+        content.addView(label("Détail"))
+        content.addView(detailBox)
+        content.addView(label("Moment"))
+        content.addView(chipRow(listOf("" to "Sans moment", "☀ " to "☀ Matin", "☾ " to "☾ Soir"), { moment }) { moment = it })
+        content.addView(label("Jour"))
+        val dayOptions = listOf(Day.MON, Day.TUE, Day.WED, Day.THU, Day.FRI, Day.SAT, Day.SUN, Day.WEEKEND)
+            .map { it.name to it.label }
+        content.addView(chipRow(dayOptions, { day.name }) { day = Day.from(it) })
+        content.addView(routineBox)
+        if (task.nth > 0) {
+            content.addView(TextView(this).apply {
+                text = "N'apparaît que le ${task.monthlyLabel()}."
+                textSize = 12f
+                setTextColor(grey)
+                setPadding(0, dp(4), 0, 0)
+            })
+        }
+
+        val scroll = ScrollView(this)
+        scroll.addView(content)
+        AlertDialog.Builder(this)
+            .setTitle("Modifier la tâche")
+            .setView(scroll)
+            .setPositiveButton("Enregistrer") { _, _ ->
+                val title = titleBox.text.toString().trim()
+                if (title.isNotEmpty()) {
+                    TaskStore.update(
+                        this, entry.day, task.id, day,
+                        moment + title, detailBox.text.toString(), routineBox.isChecked
+                    )
+                    changed()
+                }
+            }
+            .setNeutralButton("Supprimer") { _, _ ->
+                AlertDialog.Builder(this)
+                    .setMessage("Supprimer « ${task.cleanText()} » ?")
+                    .setPositiveButton("Supprimer") { _, _ ->
+                        TaskStore.delete(this, entry.day, task.id)
+                        changed()
+                    }
+                    .setNegativeButton("Annuler", null)
+                    .show()
+            }
+            .setNegativeButton("Annuler", null)
+            .show()
     }
 }

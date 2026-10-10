@@ -53,7 +53,7 @@ class TaskFactory(
             is Row.Item -> {
                 val views = RemoteViews(context.packageName, R.layout.widget_item)
                 val entry = row.entry
-                views.setTextViewText(R.id.item_text, entry.task.displayText())
+                views.setTextViewText(R.id.item_text, entry.task.widgetText())
                 views.setTextColor(R.id.item_text, Palette.textColor(bg, entry.done))
                 views.setImageViewResource(
                     R.id.item_check,
