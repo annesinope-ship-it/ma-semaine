@@ -130,6 +130,13 @@ object TaskStore {
 
     fun remaining(c: Context, day: Day): Int = entries(c, day, true).count { !it.done }
 
+    // Couleur de fond de la case d'un jour
+    fun getColor(c: Context, day: Day): Int = prefs(c).getInt("color_${day.name}", Palette.DEFAULT)
+
+    fun setColor(c: Context, day: Day, color: Int) {
+        prefs(c).edit().putInt("color_${day.name}", color).commit()
+    }
+
     // Quel jour affiche chaque widget
     fun setWidgetDay(c: Context, widgetId: Int, day: Day) {
         prefs(c).edit().putString("widget_$widgetId", day.name).commit()

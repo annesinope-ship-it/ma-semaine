@@ -50,7 +50,13 @@ class DayWidgetProvider : AppWidgetProvider() {
             // En-tête : jour (avec un point si c'est aujourd'hui) + nombre de tâches restantes
             val isToday = day.isToday()
             views.setTextViewText(R.id.day_title, if (isToday) "● ${day.short}" else day.short)
-            views.setTextColor(R.id.day_title, day.color)
+            val bg = TaskStore.getColor(context, day)
+            views.setInt(R.id.widget_bg, "setColorFilter", Palette.opaque(bg))
+            views.setInt(R.id.widget_bg, "setImageAlpha", android.graphics.Color.alpha(bg))
+            views.setTextColor(R.id.day_title, Palette.titleColor(bg, day))
+            views.setTextColor(R.id.day_count, Palette.textColor(bg))
+            views.setTextColor(R.id.empty_view, Palette.mutedColor(bg))
+            views.setTextColor(R.id.add_button, Palette.mutedColor(bg))
             views.setTextViewText(R.id.day_count, TaskStore.remaining(context, day).toString())
 
             // Liste des tâches

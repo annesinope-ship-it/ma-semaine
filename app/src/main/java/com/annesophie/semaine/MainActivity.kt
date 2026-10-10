@@ -34,6 +34,7 @@ class MainActivity : Activity() {
     private lateinit var dayBar: LinearLayout
     private lateinit var list: LinearLayout
     private lateinit var input: EditText
+    private lateinit var colorButton: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -74,6 +75,14 @@ class MainActivity : Activity() {
         val dayScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
         dayScroll.addView(dayBar)
         root.addView(dayScroll)
+
+        colorButton = TextView(this).apply {
+            textSize = 13f
+            setTextColor(ink)
+            setPadding(dp(4), dp(10), dp(4), 0)
+            setOnClickListener { showColorDialog() }
+        }
+        root.addView(colorButton)
 
         input = EditText(this).apply {
             hint = "Nouvelle tâche"
@@ -205,6 +214,72 @@ class MainActivity : Activity() {
             .show()
     }
 
+    /** Choisir la couleur de fond de la case du jour affiché (ou de toutes les cases). */
+    private fun showColorDialog() {
+        val allBox = CheckBox(this).apply {
+            text = "Appliquer à toutes les cases"
+            textSize = 14f
+        }
+        val grid = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), dp(4))
+        }
+        val selected = TaskStore.getColor(this, current)
+        var dialog: AlertDialog? = null
+        val perRow = 4
+        Palette.colors.chunked(perRow).forEach { rowColors ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            rowColors.forEach { (name, color) ->
+                val cell = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER_HORIZONTAL
+                    setPadding(dp(2), dp(6), dp(2), dp(6))
+                    layoutParams = LinearLayout.LayoutParams(0, wrap, 1f)
+                }
+                val swatch = TextView(this).apply {
+                    val d = GradientDrawable()
+                    d.shape = GradientDrawable.OVAL
+                    d.setColor(color)
+                    d.setStroke(dp(if (color == selected) 3 else 1), if (color == selected) ink else 0xFFCCCCCC.toInt())
+                    background = d
+                    gravity = Gravity.CENTER
+                    text = if (color == selected) "✓" else ""
+                    setTextColor(Palette.textColor(color))
+                    layoutParams = LinearLayout.LayoutParams(dp(40), dp(40))
+                }
+                val label = TextView(this).apply {
+                    text = name
+                    textSize = 10f
+                    gravity = Gravity.CENTER
+                    setTextColor(grey)
+                    setPadding(0, dp(4), 0, 0)
+                }
+                cell.addView(swatch)
+                cell.addView(label)
+                cell.setOnClickListener {
+                    val days = if (allBox.isChecked) Day.values().toList() else listOf(current)
+                    days.forEach { TaskStore.setColor(this, it, color) }
+                    changed()
+                    dialog?.dismiss()
+                }
+                row.addView(cell)
+            }
+            // Complète la dernière ligne pour garder l'alignement
+            repeat(perRow - rowColors.size) {
+                row.addView(android.view.View(this).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) })
+            }
+            grid.addView(row)
+        }
+        grid.addView(allBox)
+        val scroll = ScrollView(this)
+        scroll.addView(grid)
+        dialog = AlertDialog.Builder(this)
+            .setTitle("Couleur — ${current.label}")
+            .setView(scroll)
+            .setNegativeButton("Fermer", null)
+            .show()
+    }
+
     private fun pill(color: Int, radius: Int): GradientDrawable {
         val d = GradientDrawable()
         d.cornerRadius = dp(radius).toFloat()
@@ -234,6 +309,11 @@ class MainActivity : Activity() {
             }
             dayBar.addView(chip)
         }
+
+        // Bouton couleur avec aperçu
+        val currentColor = TaskStore.getColor(this, current)
+        val colorName = Palette.colors.firstOrNull { it.second == currentColor }?.first ?: "Personnalisée"
+        colorButton.text = "🎨  Couleur de la case ${current.label} : $colorName  ›"
 
         // Liste du jour sélectionné
         list.removeAllViews()

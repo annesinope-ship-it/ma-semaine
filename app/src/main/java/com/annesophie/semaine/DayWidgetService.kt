@@ -16,16 +16,19 @@ class TaskFactory(
 ) : RemoteViewsService.RemoteViewsFactory {
 
     private var entries: List<Entry> = emptyList()
+    private var bg: Int = Palette.DEFAULT
 
     // Tâches à faire d'abord, tâches faites en bas (l'ordre d'origine est gardé sinon)
     private fun load(): List<Entry> = TaskStore.entries(context, day, true).sortedBy { it.done }
 
     override fun onCreate() {
         entries = load()
+        bg = TaskStore.getColor(context, day)
     }
 
     override fun onDataSetChanged() {
         entries = load()
+        bg = TaskStore.getColor(context, day)
     }
 
     override fun onDestroy() {}
@@ -44,10 +47,7 @@ class TaskFactory(
             ""
         }
         views.setTextViewText(R.id.item_text, prefix + task.displayText())
-        views.setTextColor(
-            R.id.item_text,
-            if (entry.done) 0xFFAAAAAA.toInt() else 0xFF222222.toInt()
-        )
+        views.setTextColor(R.id.item_text, Palette.textColor(bg, entry.done))
         views.setImageViewResource(
             R.id.item_check,
             if (entry.done) R.drawable.ic_check_on else R.drawable.ic_check_off
